@@ -34,7 +34,9 @@ async function downloadFile(token, path) {
 /** מתחבר ומוריד קובץ הקלטה במכה אחת */
 async function downloadRecording(path) {
   const token = await login();
-  return downloadFile(token, path);
+  // הנתיב שמוחזר מ-call.read (מודול ה-IVR) הוא יחסי לשלוחה (למשל "5/000.wav") -
+  // ל-DownloadFile צריך קידומת "ivr2:" כדי שיידע למצוא את הקובץ בפועל
+  return downloadFile(token, `ivr2:${path}`);
 }
 
 module.exports = { downloadRecording };
