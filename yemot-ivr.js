@@ -112,10 +112,13 @@ yemotRouter.get('/tzintuk', async (call) => {
     try {
       await provisionTzintukExtension(extensionPath, extensionPath);
       setTzintukList(user.id, extensionPath);
+      console.log(`נוצרה שלוחת צינתוק חדשה עבור ${user.username} (${user.phone}): tzintukList=${extensionPath}`);
     } catch (err) {
       console.error(`יצירת שלוחת צינתוק ל-${user.username} נכשלה:`, err.message);
       return call.id_list_message([{ type: 'text', data: 'אירעה שגיאה ביצירת הרישום, נסה שוב מאוחר יותר' }]);
     }
+  } else {
+    console.log(`${user.username} (${user.phone}) כבר רשום עם tzintukList=${user.tzintuk_list}`);
   }
 
   return call.go_to_folder(`/${extensionPath}`);
