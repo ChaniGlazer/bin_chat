@@ -1,10 +1,11 @@
-// yemot-ivr.js - השלוחה שמקבלת שיחות מימות המשיח (מודול API), מקליטה הודעה קולית,
-// מתמללת אותה ושולחת אותה לנמען שנבחר בטונים (ראו chat.js). כתובת ה-API של כל משתמש
-// צריכה להצביע ל-<כתובת-השרת>/yemot/<username> (ראו users.js) - כך יודעים מי השולח.
+// yemot-ivr.js - שלוחה אחת משותפת לכל המשתמשים בימות המשיח (route `/yemot`, מוגדרת פעם
+// אחת בפאנל ימות - אין צורך בשלוחה נפרדת לכל משתמש). מזהה את השולח אוטומטית לפי מספר
+// המתקשר (ApiPhone), ושואלת רק "למי לשלוח" בתפריט טונים דינמי לפי USERS_JSON - מקליטה
+// הודעה קולית, מתמללת אותה ושולחת אותה לנמען שנבחר (ראו chat.js).
 const { YemotRouter } = require('yemot-router2');
 const { downloadRecording } = require('./yemot-api');
 const { transcribeAudio } = require('./openai-transcribe');
-const { findByUsername, findByYemotExtension } = require('./users');
+const { findByYemotExtension, findByPhone, listAllForMenu } = require('./users');
 const { deliverMessage } = require('./chat');
 
 const yemotRouter = YemotRouter({
@@ -19,6 +20,22 @@ const yemotRouter = YemotRouter({
   },
 });
 
+/** בונה הודעת תפריט "לבנימין הקש 1, לשמואל הקש 2..." מתוך כל המשתמשים הרשומים. */
+function buildMenuPrompt() {
+  const users = listAllForMenu();
+  const parts = users.map((u) => `ל${u.label} הקש ${u.yemot_extension}`);
+  return parts.join(', ');
+}
+
+async function askForRecipient(call) {
+  const code = await call.read(
+    [{ type: 'text', data: `למי ברצונך לשלוח הודעה? ${buildMenuPrompt()}, ולאחר מכן סולמית` }],
+    'tap',
+    { max_digits: 10, min_digits: 1, digits_allowed: [], typing_playback_mode: 'Digits' }
+  );
+  return findByYemotExtension(String(code));
+}
+
 async function transcribeRecording(filePath) {
   const audioBuffer = await downloadRecording(filePath);
   try {
@@ -29,23 +46,19 @@ async function transcribeRecording(filePath) {
   }
 }
 
-yemotRouter.get('/:username', async (call) => {
-  const sender = findByUsername(call.req.params.username);
+yemotRouter.get('/', async (call) => {
+  // הערה: שם השדה של מספר המתקשר לא מתועד באופן חד-משמעי. printLog: true ידפיס ללוגים
+  // של Render את כל values שמגיעות מימות - כדאי לבדוק שם בשיחת בדיקה ראשונה ולעדכן אם צריך.
+  const callerPhone = call.ApiPhone || call.values?.ApiPhone || null;
+  const sender = callerPhone ? findByPhone(callerPhone) : null;
   if (!sender) {
-    console.error(`שיחה מימות המשיח לשם משתמש לא מוכר: ${call.req.params.username}`);
-    return call.id_list_message([{ type: 'text', data: 'שלוחה לא מוגדרת, נסה שוב מאוחר יותר' }]);
+    console.error(`שיחה ממספר לא מזוהה כמשתמש: ${callerPhone}`);
+    return call.id_list_message([{ type: 'text', data: 'המספר שלך לא מזוהה במערכת, נסה שוב מאוחר יותר' }]);
   }
 
-  // מבקשים את מספר השלוחה (yemotExtension) של מי שרוצים לשלוח לו הודעה
-  const recipientExtension = await call.read(
-    [{ type: 'text', data: 'הקש את מספר השלוחה של מי שברצונך לשלוח לו הודעה, ולאחריו סולמית' }],
-    'tap',
-    { max_digits: 10, min_digits: 1, digits_allowed: [], typing_playback_mode: 'Digits' }
-  );
-
-  const recipient = findByYemotExtension(String(recipientExtension));
+  const recipient = await askForRecipient(call);
   if (!recipient) {
-    return call.id_list_message([{ type: 'text', data: 'שלוחה לא נמצאה, נסה שוב מאוחר יותר' }]);
+    return call.id_list_message([{ type: 'text', data: 'קוד לא נמצא, נסה שוב מאוחר יותר' }]);
   }
 
   const filePath = await call.read(

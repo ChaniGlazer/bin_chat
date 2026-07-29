@@ -18,6 +18,7 @@ function getDb() {
         username TEXT NOT NULL UNIQUE,
         password_hash TEXT NOT NULL,
         phone TEXT NOT NULL,
+        label TEXT NOT NULL,
         yemot_extension TEXT NOT NULL,
         yemot_reply_extension TEXT NOT NULL,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP
@@ -52,6 +53,9 @@ function getDb() {
     const userColumns = _db.prepare('PRAGMA table_info(users)').all();
     if (!userColumns.some((c) => c.name === 'phone')) {
       _db.exec("ALTER TABLE users ADD COLUMN phone TEXT NOT NULL DEFAULT ''");
+    }
+    if (!userColumns.some((c) => c.name === 'label')) {
+      _db.exec("ALTER TABLE users ADD COLUMN label TEXT NOT NULL DEFAULT ''");
     }
   }
   return _db;
