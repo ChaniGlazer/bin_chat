@@ -1,10 +1,11 @@
 // chat.js - שולח הודעה בין שני משתמשים רשומים (מהאפליקציה או מימות), בלי קשר לערוץ שבו
-// הגיעה ההודעה: שומר ב-DB, דוחף Push אם לנמען יש מכשיר רשום, ומעלה TTS לתיבת ימות של
+// הגיעה ההודעה: שומר ב-DB, דוחף Push אם לנמען יש מכשיר רשום, מעלה TTS לתיבת ימות של
 // הנמען (בתיקיית phone/<הטלפון של הנמען עצמו> תחת שלוחת ה-TTS שלו) - כך שכשהוא מתקשר
-// לשלוחה המשותפת מהטלפון שלו, ימות מזהה אותו לפי Caller ID ומנחית אותו בדיוק על התיקייה שלו.
+// לשלוחה המשותפת מהטלפון שלו, ימות מזהה אותו לפי Caller ID ומנחית אותו בדיוק על התיקייה שלו -
+// ואם יש לו tzintuk_list רשום, גם מפעיל שיחת התראה יוצאת אליו (ראו yemot-api.js - runTzintuk).
 const db = require('./db');
 const { sendPushToAll } = require('./webpush');
-const { sendTextReply } = require('./yemot-api');
+const { sendTextReply, runTzintuk } = require('./yemot-api');
 const { backupToYemot } = require('./backup');
 
 async function deliverMessage(sender, recipient, text) {
@@ -29,6 +30,14 @@ async function deliverMessage(sender, recipient, text) {
     await sendTextReply(text, recipient.yemot_reply_extension, recipient.phone);
   } catch (err) {
     console.error(`שליחת TTS לתיבת ימות של ${recipient.username} נכשלה:`, err.message);
+  }
+
+  if (recipient.tzintuk_list) {
+    try {
+      await runTzintuk(recipient.tzintuk_list);
+    } catch (err) {
+      console.error(`הפעלת צינתוק ל-${recipient.username} נכשלה:`, err.message);
+    }
   }
 
   backupToYemot(sender);

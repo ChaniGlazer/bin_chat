@@ -99,4 +99,30 @@ async function downloadJson(path) {
   }
 }
 
-module.exports = { downloadRecording, sendTextReply, uploadJson, downloadJson };
+/**
+ * מפעיל צינתוק (שיחה יוצאת אוטומטית) לכל הרשומים ברשימת tzintuk נתונה - ראו
+ * https://f2.freeivr.co.il/topic/14130 ו-https://mitmachim.top/topic/28633.
+ * שימו לב: זה ה-API היחיד ב-yemot-api.js שמשתמש בטוקן "מספר:סיסמה" ישירות במקום
+ * Login+session-token - כך זה מתועד ל-RunTzintuk באופן ספציפי. יש לו עלות קטנה
+ * (חלק מיחידה למספר) - לא זהה לחלוטין לשאר הקריאות שבקובץ הזה שהן ללא עלות.
+ * דורש שהנמען כבר נרשם פעם אחת לרשימה הזו (התקשר לשלוחת ההרשמה בפאנל ימות).
+ */
+async function runTzintuk(listId) {
+  const username = process.env.YEMOT_SYSTEM_NUMBER;
+  const password = process.env.YEMOT_PASSWORD;
+  if (!username || !password) {
+    throw new Error('חסרים YEMOT_SYSTEM_NUMBER / YEMOT_PASSWORD ב-.env');
+  }
+
+  const token = `${username}:${password}`;
+  const url = `${BASE_URL}RunTzintuk?token=${encodeURIComponent(token)}&phones=${encodeURIComponent(`tzl:${listId}`)}`;
+  const res = await fetch(url);
+  const data = await res.json();
+
+  if (data.responseStatus !== 'OK') {
+    throw new Error(`Yemot RunTzintuk נכשל: ${data.message || 'unknown error'}`);
+  }
+  return data;
+}
+
+module.exports = { downloadRecording, sendTextReply, uploadJson, downloadJson, runTzintuk };

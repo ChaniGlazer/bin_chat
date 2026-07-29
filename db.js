@@ -21,6 +21,7 @@ function getDb() {
         label TEXT NOT NULL,
         yemot_extension TEXT NOT NULL,
         yemot_reply_extension TEXT NOT NULL,
+        tzintuk_list TEXT,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP
       );
       CREATE TABLE IF NOT EXISTS messages (
@@ -56,6 +57,9 @@ function getDb() {
     }
     if (!userColumns.some((c) => c.name === 'label')) {
       _db.exec("ALTER TABLE users ADD COLUMN label TEXT NOT NULL DEFAULT ''");
+    }
+    if (!userColumns.some((c) => c.name === 'tzintuk_list')) {
+      _db.exec('ALTER TABLE users ADD COLUMN tzintuk_list TEXT');
     }
   }
   return _db;

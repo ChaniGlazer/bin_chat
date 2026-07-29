@@ -51,9 +51,13 @@ function listAllForMenu() {
 
 /**
  * טוען משתמשים מתוך USERS_JSON (מערך JSON ב-.env) ל-DB. פורמט:
- * [{"username":"...","password":"...","phone":"...","label":"בנימין","yemotExtension":"1","yemotReplyExtension":"6"}, ...]
+ * [{"username":"...","password":"...","phone":"...","label":"בנימין","yemotExtension":"1","yemotReplyExtension":"6","tzintukList":"123"}, ...]
  * `label` - השם שנשמע בתפריט הטונים המשותף בימות ("לבנימין הקש 1..."); אם לא צוין, נופל
  * חזרה ל-username.
+ * `tzintukList` - אופציונלי. מספר רשימת ה-tzintuk האישית של המשתמש בפאנל ימות (ראו
+ * chat.js/yemot-api.js - runTzintuk) - כדי לקבל שיחת התראה כשמגיעה לו הודעה חדשה, צריך
+ * שהוא כבר נרשם פעם אחת לרשימה הזו (התקשר לשלוחת ההרשמה בפאנל ימות). בלי זה, פשוט לא
+ * נשלח צינתוק למשתמש הזה (רק Push/TTS כרגיל).
  * `password` אופציונלי - למשתמש "טלפון בלבד" שלא נכנס לאפליקציה (למשל מדבר רק דרך ימות)
  * אפשר להשמיט אותו; במקרה כזה נוצרת סיסמה רנדומלית שאף אחד לא מכיר, כך שלא ניתן להתחבר
  * לאפליקציה בשמו בפועל, אבל הוא עדיין מופיע כאיש קשר לצ'אט ויכול לשלוח/לקבל דרך ימות.
@@ -72,14 +76,15 @@ function seedUsersFromEnv() {
   }
 
   const upsert = db.prepare(`
-    INSERT INTO users (username, password_hash, phone, label, yemot_extension, yemot_reply_extension)
-    VALUES (?, ?, ?, ?, ?, ?)
+    INSERT INTO users (username, password_hash, phone, label, yemot_extension, yemot_reply_extension, tzintuk_list)
+    VALUES (?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(username) DO UPDATE SET
       password_hash = excluded.password_hash,
       phone = excluded.phone,
       label = excluded.label,
       yemot_extension = excluded.yemot_extension,
-      yemot_reply_extension = excluded.yemot_reply_extension
+      yemot_reply_extension = excluded.yemot_reply_extension,
+      tzintuk_list = excluded.tzintuk_list
   `);
 
   for (const u of users) {
@@ -93,7 +98,8 @@ function seedUsersFromEnv() {
       String(u.phone),
       u.label || u.username,
       String(u.yemotExtension),
-      String(u.yemotReplyExtension)
+      String(u.yemotReplyExtension),
+      u.tzintukList ? String(u.tzintukList) : null
     );
   }
 }
