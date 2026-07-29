@@ -65,7 +65,8 @@ async function sendTextReply(text) {
   const sanitized = text.replace(/[."'&-]/g, '');
 
   const token = await login();
-  const path = `${extension}/${Date.now()}.tts`;
+  // אותה קידומת "ivr2:" שצריך גם ב-DownloadFile (ראו downloadRecording למעלה)
+  const path = `ivr2:${extension}/${Date.now()}.tts`;
   return uploadFile(token, path, Buffer.from(sanitized, 'utf-8'), 'reply.tts');
 }
 
