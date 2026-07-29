@@ -6,7 +6,17 @@ const { downloadRecording } = require('./yemot-api');
 const { transcribeAudio } = require('./openai-transcribe');
 const { sendPushToAll } = require('./webpush');
 
-const yemotRouter = YemotRouter({ printLog: true });
+const yemotRouter = YemotRouter({
+  printLog: true,
+  // בלי זה, שגיאה בתוך שיחה מפילה את כל השרת (וכל שיחה אחרת/בקשה אחרת שנופלת יחד איתה
+  // בזמן שRender מרים אותו מחדש) - והמתקשר שומע "אין מענה בשרת API"
+  uncaughtErrorHandler: (error, call) => {
+    console.error('שגיאה לא צפויה בטיפול בשיחה מימות המשיח:', error);
+    call.id_list_message([
+      { type: 'text', data: 'אירעה שגיאה, נסה שוב מאוחר יותר' },
+    ]);
+  },
+});
 
 async function handleRecording(filePath, phone) {
   const audioBuffer = await downloadRecording(filePath);
