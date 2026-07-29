@@ -3,6 +3,7 @@ const path = require('node:path');
 const express = require('express');
 const db = require('./db');
 const { sendPushToAll } = require('./webpush');
+const { sendTextReply } = require('./yemot-api');
 const yemotRouter = require('./yemot-ivr');
 
 const app = express();
@@ -71,9 +72,25 @@ app.post('/send', async (req, res) => {
 // לא מחזירים את audio_base64 כאן (יכול להיות כבד) - רק מטא-דאטה
 app.get('/messages', (req, res) => {
   const rows = db
-    .prepare('SELECT id, text, from_phone, created_at FROM messages ORDER BY id DESC LIMIT 100')
+    .prepare('SELECT id, text, from_phone, direction, created_at FROM messages ORDER BY id DESC LIMIT 100')
     .all();
-  res.json(rows);
+  res.json(rows.reverse());
+});
+
+// שולח תשובת טקסט כקובץ TTS לשלוחה שהמחייג יכול לחייג אליה ולשמוע (ראו yemot-api.js)
+app.post('/reply', async (req, res) => {
+  const { text } = req.body;
+  if (!text) return res.status(400).json({ error: 'text required' });
+
+  try {
+    await sendTextReply(text);
+  } catch (err) {
+    console.error('שליחת תשובה לימות המשיח נכשלה:', err);
+    return res.status(500).json({ error: 'send failed' });
+  }
+
+  db.prepare("INSERT INTO messages (text, direction) VALUES (?, 'out')").run(text);
+  res.json({ ok: true });
 });
 
 const PORT = process.env.PORT || 3000;

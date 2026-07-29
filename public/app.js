@@ -1,7 +1,9 @@
 // app.js
 const enableBtn = document.getElementById('enable-btn');
 const statusEl = document.getElementById('status');
-const listEl = document.getElementById('messages');
+const chatEl = document.getElementById('chat');
+const replyForm = document.getElementById('reply-form');
+const replyInput = document.getElementById('reply-input');
 
 function urlBase64ToUint8Array(base64String) {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
@@ -43,20 +45,21 @@ async function enablePush() {
 async function loadMessages() {
   const res = await fetch('/messages');
   if (!res.ok) {
-    listEl.innerHTML = '<li>שגיאה בטעינת הודעות</li>';
+    chatEl.innerHTML = '<div class="empty">שגיאה בטעינת הודעות</div>';
     return;
   }
   const messages = await res.json();
   if (!messages.length) {
-    listEl.innerHTML = '<li class="empty">אין הודעות עדיין</li>';
+    chatEl.innerHTML = '<div class="empty">אין הודעות עדיין</div>';
     return;
   }
-  listEl.innerHTML = messages.map(renderMessage).join('');
+  chatEl.innerHTML = messages.map(renderMessage).join('');
+  chatEl.scrollTop = chatEl.scrollHeight;
 }
 
 function renderMessage(m) {
-  const phoneLabel = m.from_phone ? `<div class="phone">מ-${escapeHtml(m.from_phone)}</div>` : '';
-  return `<li><div class="text">${escapeHtml(m.text)}</div>${phoneLabel}<div class="time">${m.created_at}</div></li>`;
+  const side = m.direction === 'out' ? 'out' : 'in';
+  return `<div class="bubble ${side}"><div class="text">${escapeHtml(m.text)}</div><div class="time">${m.created_at}</div></div>`;
 }
 
 function escapeHtml(str) {
@@ -65,9 +68,33 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
+async function sendReply(event) {
+  event.preventDefault();
+  const text = replyInput.value.trim();
+  if (!text) return;
+
+  replyInput.disabled = true;
+  try {
+    const res = await fetch('/reply', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text }),
+    });
+    if (!res.ok) throw new Error('send failed');
+    replyInput.value = '';
+    await loadMessages();
+  } catch {
+    statusEl.textContent = 'שליחת התשובה נכשלה, נסה שוב';
+  } finally {
+    replyInput.disabled = false;
+    replyInput.focus();
+  }
+}
+
 if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/sw.js');
 }
 
 enableBtn.addEventListener('click', enablePush);
+replyForm.addEventListener('submit', sendReply);
 loadMessages();

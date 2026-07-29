@@ -39,4 +39,34 @@ async function downloadRecording(path) {
   return downloadFile(token, `ivr2:${path}`);
 }
 
-module.exports = { downloadRecording };
+async function uploadFile(token, path, buffer, filename) {
+  const form = new FormData();
+  form.append('token', token);
+  form.append('path', path);
+  form.append('file', new Blob([buffer], { type: 'text/plain' }), filename);
+
+  const res = await fetch(`${BASE_URL}UploadFile`, { method: 'POST', body: form });
+  const data = await res.json();
+
+  if (data.responseStatus !== 'OK') {
+    throw new Error(`Yemot UploadFile נכשל: ${data.message || 'unknown error'}`);
+  }
+  return data;
+}
+
+/**
+ * שולח תשובת טקסט כקובץ TTS לשלוחה שהמחייג יכול לחייג אליה ולשמוע.
+ * קובץ .tts הוא טקסט פשוט (UTF-8) שימות מקריא עם מנוע ה-TTS שלה בעצמה -
+ * אין צורך ביצירת קובץ קול, ואין צורך לדרוס - השלוחה תמיד משמיעה את הקובץ האחרון שהועלה.
+ */
+async function sendTextReply(text) {
+  const extension = process.env.YEMOT_REPLY_EXTENSION || '6';
+  // אותם תווים לא חוקיים שימות דוחה בהקראת TTS בכל הקשר אחר (ראו yemot-ivr.js)
+  const sanitized = text.replace(/[."'&-]/g, '');
+
+  const token = await login();
+  const path = `${extension}/${Date.now()}.tts`;
+  return uploadFile(token, path, Buffer.from(sanitized, 'utf-8'), 'reply.tts');
+}
+
+module.exports = { downloadRecording, sendTextReply };

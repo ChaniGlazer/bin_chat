@@ -17,6 +17,7 @@ function getDb() {
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         text TEXT NOT NULL,
         from_phone TEXT,
+        direction TEXT NOT NULL DEFAULT 'in',
         created_at TEXT DEFAULT CURRENT_TIMESTAMP
       );
       CREATE TABLE IF NOT EXISTS subscriptions (
@@ -25,6 +26,12 @@ function getDb() {
         created_at TEXT DEFAULT CURRENT_TIMESTAMP
       );
     `);
+
+    // מיגרציה: תומך ב-DB ישן שנוצר לפני שנוסף direction
+    const columns = _db.prepare('PRAGMA table_info(messages)').all();
+    if (!columns.some((c) => c.name === 'direction')) {
+      _db.exec("ALTER TABLE messages ADD COLUMN direction TEXT NOT NULL DEFAULT 'in'");
+    }
   }
   return _db;
 }
