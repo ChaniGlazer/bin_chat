@@ -39,13 +39,19 @@ async function downloadRecording(path) {
   return downloadFile(token, `ivr2:${path}`);
 }
 
-async function uploadFile(token, path, buffer, filename) {
+/**
+ * `tts: true` = מספור אוטומטי (ראו https://f2.freeivr.co.il/topic/9590 - עם path שהוא
+ * תיקייה בלבד, בלי שם קובץ, ו-tts=1 בכתובת, ימות עצמה בוחרת את המספר הבא בתור ומוסיפה
+ * סיומת .tts - זה מה שגורם ל"השמעת הקובץ האחרון שהועלה" לעבוד נכון בלי התנגשויות שמות.
+ */
+async function uploadFile(token, path, buffer, filename, { tts = false } = {}) {
   const form = new FormData();
   form.append('token', token);
   form.append('path', path);
   form.append('file', new Blob([buffer], { type: 'text/plain' }), filename);
 
-  const res = await fetch(`${BASE_URL}UploadFile`, { method: 'POST', body: form });
+  const url = `${BASE_URL}UploadFile${tts ? '?tts=1' : ''}`;
+  const res = await fetch(url, { method: 'POST', body: form });
   const data = await res.json();
 
   if (data.responseStatus !== 'OK') {
@@ -58,17 +64,18 @@ async function uploadFile(token, path, buffer, filename) {
  * שולח הודעת טקסט כקובץ TTS לשלוחת ה-TTS של הנמען, בתת-תיקייה לפי מספר הטלפון של הנמען
  * עצמו - כך שכשהוא מתקשר לשלוחה (שיכולה להיות משותפת למספר משתמשים, ראו users.js)
  * ימות מזהה אותו לפי Caller ID ומנחית אותו ישר על התיקייה עם ההודעות שלו.
- * קובץ .tts הוא טקסט פשוט (UTF-8) שימות מקריא עם מנוע ה-TTS שלה בעצמה -
- * אין צורך ביצירת קובץ קול, ואין צורך לדרוס - השלוחה תמיד משמיעה את הקובץ האחרון שהועלה.
+ * לא קובעים שם קובץ בעצמנו - ימות עצמה ממספרת את הקובץ אוטומטית (tts:true למעלה),
+ * ומשמיעה תמיד את המספר הגבוה ביותר בתיקייה, כלומר את ההודעה האחרונה שהועלתה.
  */
 async function sendTextReply(text, recipientExtension, recipientPhone) {
   // אותם תווים לא חוקיים שימות דוחה בהקראת TTS בכל הקשר אחר (ראו yemot-ivr.js)
   const sanitized = text.replace(/[."'&-]/g, '');
 
   const token = await login();
-  // אותה קידומת "ivr2:" שצריך גם ב-DownloadFile (ראו downloadRecording למעלה)
-  const path = `ivr2:${recipientExtension}/phone/${recipientPhone}/${Date.now()}.tts`;
-  return uploadFile(token, path, Buffer.from(sanitized, 'utf-8'), 'reply.tts');
+  // אותה קידומת "ivr2:" שצריך גם ב-DownloadFile (ראו downloadRecording למעלה) - תיקייה
+  // בלבד, בלי שם קובץ, כדי שהמספור האוטומטי של ימות יפעל (ראו הערה מעל uploadFile)
+  const path = `ivr2:${recipientExtension}/Phone/${recipientPhone}`;
+  return uploadFile(token, path, Buffer.from(sanitized, 'utf-8'), 'reply.tts', { tts: true });
 }
 
 /**
