@@ -12,6 +12,15 @@ seedUsersFromEnv();
 const app = express();
 app.use(express.json());
 
+// לוג זמני לאבחון "אין מענה בשרת API" - yemot-router2 דורש 4 פרמטרים חובה
+// (ApiPhone/ApiDID/ApiExtension/ApiCallId) ועונה בשקט בלי שום לוג אם אחד מהם חסר,
+// אז זה חייב לקרות *לפני* ה-mount שלו כדי לתפוס בקשות שנכשלות שם. אפשר להסיר
+// אחרי שהבעיה עם שלוחת ה-tzintuk תיפתר.
+app.use('/yemot', (req, res, next) => {
+  console.log(`[yemot debug] ${req.method} ${req.originalUrl} query=${JSON.stringify(req.query)} body=${JSON.stringify(req.body)}`);
+  next();
+});
+
 // שלוחת ימות המשיח (מודול API) - שלוחה אחת משותפת לכולם, צריכה להצביע ל-<כתובת-השרת>/yemot
 // (ראו yemot-ivr.js - היא שואלת "מי אתה" ו"למי לשלוח" בתפריט טונים דינמי) - חייב להישאר
 // לפני requireAuth, זו קריאה חיצונית משרת ימות, לא מהדפדפן
