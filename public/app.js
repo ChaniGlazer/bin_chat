@@ -4,6 +4,10 @@ const statusEl = document.getElementById('status');
 const chatEl = document.getElementById('chat');
 const replyForm = document.getElementById('reply-form');
 const replyInput = document.getElementById('reply-input');
+const contactsEl = document.getElementById('contacts');
+const chatTitleEl = document.getElementById('chat-title');
+
+let currentContact = null;
 
 function urlBase64ToUint8Array(base64String) {
   const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
@@ -42,8 +46,36 @@ async function enablePush() {
   enableBtn.disabled = true;
 }
 
+async function loadContacts() {
+  const res = await fetch('/contacts');
+  if (!res.ok) return;
+  const contacts = await res.json();
+
+  contactsEl.innerHTML = contacts
+    .map((c) => `<button class="contact" data-username="${escapeHtml(c.username)}">${escapeHtml(c.username)}</button>`)
+    .join('');
+
+  contactsEl.querySelectorAll('.contact').forEach((btn) => {
+    btn.addEventListener('click', () => selectContact(btn.dataset.username));
+  });
+
+  if (!currentContact && contacts.length) {
+    selectContact(contacts[0].username);
+  }
+}
+
+function selectContact(username) {
+  currentContact = username;
+  chatTitleEl.textContent = username;
+  contactsEl.querySelectorAll('.contact').forEach((btn) => {
+    btn.classList.toggle('active', btn.dataset.username === username);
+  });
+  loadMessages();
+}
+
 async function loadMessages() {
-  const res = await fetch('/messages');
+  if (!currentContact) return;
+  const res = await fetch(`/messages?with=${encodeURIComponent(currentContact)}`);
   if (!res.ok) {
     chatEl.innerHTML = '<div class="empty">שגיאה בטעינת הודעות</div>';
     return;
@@ -71,20 +103,20 @@ function escapeHtml(str) {
 async function sendReply(event) {
   event.preventDefault();
   const text = replyInput.value.trim();
-  if (!text) return;
+  if (!text || !currentContact) return;
 
   replyInput.disabled = true;
   try {
-    const res = await fetch('/reply', {
+    const res = await fetch('/send', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ text }),
+      body: JSON.stringify({ to: currentContact, text }),
     });
     if (!res.ok) throw new Error('send failed');
     replyInput.value = '';
     await loadMessages();
   } catch {
-    statusEl.textContent = 'שליחת התשובה נכשלה, נסה שוב';
+    statusEl.textContent = 'שליחת ההודעה נכשלה, נסה שוב';
   } finally {
     replyInput.disabled = false;
     replyInput.focus();
@@ -97,4 +129,4 @@ if ('serviceWorker' in navigator) {
 
 enableBtn.addEventListener('click', enablePush);
 replyForm.addEventListener('submit', sendReply);
-loadMessages();
+loadContacts();

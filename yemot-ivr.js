@@ -1,10 +1,11 @@
 // yemot-ivr.js - השלוחה שמקבלת שיחות מימות המשיח (מודול API), מקליטה הודעה קולית,
-// מתמללת אותה ושומרת רק את הטקסט (ההקלטה עצמה לא נשמרת)
+// מתמללת אותה ושולחת אותה לנמען שנבחר בטונים (ראו chat.js). כתובת ה-API של כל משתמש
+// צריכה להצביע ל-<כתובת-השרת>/yemot/<username> (ראו users.js) - כך יודעים מי השולח.
 const { YemotRouter } = require('yemot-router2');
-const db = require('./db');
 const { downloadRecording } = require('./yemot-api');
 const { transcribeAudio } = require('./openai-transcribe');
-const { sendPushToAll } = require('./webpush');
+const { findByUsername, findByYemotExtension } = require('./users');
+const { deliverMessage } = require('./chat');
 
 const yemotRouter = YemotRouter({
   printLog: true,
@@ -18,37 +19,34 @@ const yemotRouter = YemotRouter({
   },
 });
 
-async function handleRecording(filePath, phone) {
+async function transcribeRecording(filePath) {
   const audioBuffer = await downloadRecording(filePath);
-
-  // מתמללים ומשליכים את בייטי האודיו - לא שומרים הקלטה, רק טקסט
-  let transcript = null;
   try {
-    transcript = await transcribeAudio(audioBuffer, 'audio/wav');
+    return (await transcribeAudio(audioBuffer, 'audio/wav'))?.trim() || null;
   } catch (err) {
     console.error('תמלול נכשל:', err.message);
-  }
-
-  const text = transcript?.trim()
-    ? transcript.trim()
-    : phone
-      ? `התקבלה הודעה קולית מ-${phone}, אך התמלול נכשל`
-      : 'התקבלה הודעה קולית, אך התמלול נכשל';
-
-  db.prepare('INSERT INTO messages (text, from_phone) VALUES (?, ?)').run(text, phone || null);
-
-  const rows = db.prepare('SELECT subscription_json FROM subscriptions').all();
-  const subscriptions = rows.map((r) => JSON.parse(r.subscription_json));
-  if (subscriptions.length) {
-    await sendPushToAll(subscriptions, text);
+    return null;
   }
 }
 
-yemotRouter.get('/', async (call) => {
-  // הערה: שם השדה של מספר המתקשר לא מתועד באופן חד-משמעי.
-  // printLog: true ידפיס ללוגים של Render את כל values שמגיעות מימות -
-  // כדאי לבדוק שם בשיחת בדיקה ראשונה ולעדכן אם צריך.
-  const callerPhone = call.ApiPhone || call.values?.ApiPhone || null;
+yemotRouter.get('/:username', async (call) => {
+  const sender = findByUsername(call.req.params.username);
+  if (!sender) {
+    console.error(`שיחה מימות המשיח לשם משתמש לא מוכר: ${call.req.params.username}`);
+    return call.id_list_message([{ type: 'text', data: 'שלוחה לא מוגדרת, נסה שוב מאוחר יותר' }]);
+  }
+
+  // מבקשים את מספר השלוחה (yemotExtension) של מי שרוצים לשלוח לו הודעה
+  const recipientExtension = await call.read(
+    [{ type: 'text', data: 'הקש את מספר השלוחה של מי שברצונך לשלוח לו הודעה, ולאחריו סולמית' }],
+    'tap',
+    { max_digits: 10, min_digits: 1, digits_allowed: [], typing_playback_mode: 'Digits' }
+  );
+
+  const recipient = findByYemotExtension(String(recipientExtension));
+  if (!recipient) {
+    return call.id_list_message([{ type: 'text', data: 'שלוחה לא נמצאה, נסה שוב מאוחר יותר' }]);
+  }
 
   const filePath = await call.read(
     [
@@ -64,7 +62,10 @@ yemotRouter.get('/', async (call) => {
   );
 
   try {
-    await handleRecording(filePath, callerPhone);
+    // מתמללים ומשליכים את בייטי האודיו - לא שומרים הקלטה, רק טקסט
+    const transcript = await transcribeRecording(filePath);
+    const text = transcript || `התקבלה הודעה קולית מ-${sender.phone}, אך התמלול נכשל`;
+    await deliverMessage(sender, recipient, text);
   } catch (err) {
     console.error('שגיאה בטיפול בהקלטה מימות המשיח:', err);
     return call.id_list_message([

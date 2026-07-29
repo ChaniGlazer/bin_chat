@@ -13,24 +13,45 @@ function getDb() {
   if (!_db) {
     _db = new DatabaseSync(DB_PATH);
     _db.exec(`
+      CREATE TABLE IF NOT EXISTS users (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        username TEXT NOT NULL UNIQUE,
+        password_hash TEXT NOT NULL,
+        phone TEXT NOT NULL,
+        yemot_extension TEXT NOT NULL,
+        yemot_reply_extension TEXT NOT NULL,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+      );
       CREATE TABLE IF NOT EXISTS messages (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
+        sender_id INTEGER NOT NULL REFERENCES users(id),
+        recipient_id INTEGER NOT NULL REFERENCES users(id),
         text TEXT NOT NULL,
-        from_phone TEXT,
-        direction TEXT NOT NULL DEFAULT 'in',
         created_at TEXT DEFAULT CURRENT_TIMESTAMP
       );
       CREATE TABLE IF NOT EXISTS subscriptions (
         endpoint TEXT PRIMARY KEY,
+        user_id INTEGER NOT NULL REFERENCES users(id),
         subscription_json TEXT NOT NULL,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP
       );
     `);
 
-    // מיגרציה: תומך ב-DB ישן שנוצר לפני שנוסף direction
+    // מיגרציה: תומך ב-DB ישן שנוצר לפני התמיכה בצ'אט בין-משתמשים (sender_id/recipient_id)
     const columns = _db.prepare('PRAGMA table_info(messages)').all();
-    if (!columns.some((c) => c.name === 'direction')) {
-      _db.exec("ALTER TABLE messages ADD COLUMN direction TEXT NOT NULL DEFAULT 'in'");
+    if (!columns.some((c) => c.name === 'sender_id')) {
+      _db.exec('ALTER TABLE messages ADD COLUMN sender_id INTEGER REFERENCES users(id)');
+    }
+    if (!columns.some((c) => c.name === 'recipient_id')) {
+      _db.exec('ALTER TABLE messages ADD COLUMN recipient_id INTEGER REFERENCES users(id)');
+    }
+    const subColumns = _db.prepare('PRAGMA table_info(subscriptions)').all();
+    if (!subColumns.some((c) => c.name === 'user_id')) {
+      _db.exec('ALTER TABLE subscriptions ADD COLUMN user_id INTEGER REFERENCES users(id)');
+    }
+    const userColumns = _db.prepare('PRAGMA table_info(users)').all();
+    if (!userColumns.some((c) => c.name === 'phone')) {
+      _db.exec("ALTER TABLE users ADD COLUMN phone TEXT NOT NULL DEFAULT ''");
     }
   }
   return _db;

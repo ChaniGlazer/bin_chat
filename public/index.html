@@ -98,6 +98,26 @@
       cursor: pointer;
     }
     #reply-form button:disabled { background: #334155; }
+
+    #contacts {
+      display: flex;
+      gap: 6px;
+      overflow-x: auto;
+      padding: 0 16px 10px;
+      flex-shrink: 0;
+    }
+    .contact {
+      background: #1e293b;
+      color: #f1f5f9;
+      border: none;
+      border-radius: 16px;
+      padding: 6px 14px;
+      font-size: 0.85rem;
+      white-space: nowrap;
+      cursor: pointer;
+    }
+    .contact.active { background: #3b82f6; }
+    #chat-title { font-size: 0.9rem; color: #94a3b8; padding: 0 16px 4px; }
   </style>
 </head>
 <body>
@@ -107,6 +127,8 @@
     <button id="enable-btn">אפשר התראות</button>
   </header>
 
+  <div id="contacts"></div>
+  <div id="chat-title"></div>
   <div id="chat"></div>
 
   <form id="reply-form">

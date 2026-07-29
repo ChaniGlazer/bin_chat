@@ -55,19 +55,41 @@ async function uploadFile(token, path, buffer, filename) {
 }
 
 /**
- * שולח תשובת טקסט כקובץ TTS לשלוחה שהמחייג יכול לחייג אליה ולשמוע.
+ * שולח הודעת טקסט כקובץ TTS לשלוחת ה-TTS של הנמען, בתת-תיקייה לפי מספר הטלפון של הנמען
+ * עצמו - כך שכשהוא מתקשר לשלוחה (שיכולה להיות משותפת למספר משתמשים, ראו users.js)
+ * ימות מזהה אותו לפי Caller ID ומנחית אותו ישר על התיקייה עם ההודעות שלו.
  * קובץ .tts הוא טקסט פשוט (UTF-8) שימות מקריא עם מנוע ה-TTS שלה בעצמה -
  * אין צורך ביצירת קובץ קול, ואין צורך לדרוס - השלוחה תמיד משמיעה את הקובץ האחרון שהועלה.
  */
-async function sendTextReply(text) {
-  const extension = process.env.YEMOT_REPLY_EXTENSION || '6';
+async function sendTextReply(text, recipientExtension, recipientPhone) {
   // אותם תווים לא חוקיים שימות דוחה בהקראת TTS בכל הקשר אחר (ראו yemot-ivr.js)
   const sanitized = text.replace(/[."'&-]/g, '');
 
   const token = await login();
   // אותה קידומת "ivr2:" שצריך גם ב-DownloadFile (ראו downloadRecording למעלה)
-  const path = `ivr2:${extension}/${Date.now()}.tts`;
+  const path = `ivr2:${recipientExtension}/phone/${recipientPhone}/${Date.now()}.tts`;
   return uploadFile(token, path, Buffer.from(sanitized, 'utf-8'), 'reply.tts');
 }
 
-module.exports = { downloadRecording, sendTextReply };
+/**
+ * מעלה אובייקט כקובץ JSON לנתיב ivr2: נתון - משמש לגיבוי הודעות/subscriptions
+ * לשרת של ימות, כדי שהנתונים ישרדו גם כשהדיסק של Render נמחק בין deploy-ים.
+ */
+async function uploadJson(path, obj) {
+  const token = await login();
+  return uploadFile(token, path, Buffer.from(JSON.stringify(obj), 'utf-8'), 'backup.json');
+}
+
+/** מוריד ומפענח קובץ JSON שהועלה עם uploadJson. מחזיר null אם אין עדיין גיבוי (או שגיאת רשת). */
+async function downloadJson(path) {
+  try {
+    const token = await login();
+    const buf = await downloadFile(token, path);
+    return JSON.parse(buf.toString('utf-8'));
+  } catch (err) {
+    console.error('הורדת גיבוי מימות המשיח נכשלה (יכול להיות שעדיין אין גיבוי):', err.message);
+    return null;
+  }
+}
+
+module.exports = { downloadRecording, sendTextReply, uploadJson, downloadJson };
