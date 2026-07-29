@@ -35,6 +35,20 @@ function findByPhone(phone) {
   return db.prepare('SELECT * FROM users WHERE phone = ?').get(phone);
 }
 
+/**
+ * שלוחה/רשימת tzintuk ייעודית שנוצרת אוטומטית לכל משתמש (ראו yemot-ivr.js route '/tzintuk'
+ * ו-yemot-api.js provisionTzintukExtension) - אין צורך שהמספר יהיה קצר/יפה, הוא לא נשמע
+ * ולא מוקש בשום מקום, רק צריך להיות ייחודי. "9" מונע התנגשות עם yemotExtension הקטנים (1,2,3...).
+ */
+function tzintukExtensionFor(user) {
+  return `9${user.id}`;
+}
+
+/** שומר את מספר רשימת ה-tzintuk של משתמש אחרי שנוצרה (ראו yemot-ivr.js route '/tzintuk'). */
+function setTzintukList(userId, listId) {
+  db.prepare('UPDATE users SET tzintuk_list = ? WHERE id = ?').run(listId, userId);
+}
+
 /** רשימת "אנשי קשר" לצ'אט - כל המשתמשים חוץ מהמשתמש עצמו, בלי שדות רגישים. */
 function listOthers(excludeUserId) {
   return db
@@ -54,10 +68,10 @@ function listAllForMenu() {
  * [{"username":"...","password":"...","phone":"...","label":"בנימין","yemotExtension":"1","yemotReplyExtension":"6","tzintukList":"123"}, ...]
  * `label` - השם שנשמע בתפריט הטונים המשותף בימות ("לבנימין הקש 1..."); אם לא צוין, נופל
  * חזרה ל-username.
- * `tzintukList` - אופציונלי. מספר רשימת ה-tzintuk האישית של המשתמש בפאנל ימות (ראו
- * chat.js/yemot-api.js - runTzintuk) - כדי לקבל שיחת התראה כשמגיעה לו הודעה חדשה, צריך
- * שהוא כבר נרשם פעם אחת לרשימה הזו (התקשר לשלוחת ההרשמה בפאנל ימות). בלי זה, פשוט לא
- * נשלח צינתוק למשתמש הזה (רק Push/TTS כרגיל).
+ * `tzintukList` - אופציונלי, בד"כ לא צריך לקבוע ידנית: נוצר אוטומטית (ראו
+ * yemot-ivr.js route '/tzintuk' ו-setTzintukList למטה) כשמשתמש מתקשר בפעם הראשונה
+ * ונרשם. אם כן מוגדר כאן, הוא "מנצח" ולא נדרס - ואם לא, לא נוגעים בערך שכבר נוצר
+ * אוטומטית (COALESCE למטה) כדי שרישום קיים לא יימחק בכל restart.
  * `password` אופציונלי - למשתמש "טלפון בלבד" שלא נכנס לאפליקציה (למשל מדבר רק דרך ימות)
  * אפשר להשמיט אותו; במקרה כזה נוצרת סיסמה רנדומלית שאף אחד לא מכיר, כך שלא ניתן להתחבר
  * לאפליקציה בשמו בפועל, אבל הוא עדיין מופיע כאיש קשר לצ'אט ויכול לשלוח/לקבל דרך ימות.
@@ -84,7 +98,7 @@ function seedUsersFromEnv() {
       label = excluded.label,
       yemot_extension = excluded.yemot_extension,
       yemot_reply_extension = excluded.yemot_reply_extension,
-      tzintuk_list = excluded.tzintuk_list
+      tzintuk_list = COALESCE(excluded.tzintuk_list, users.tzintuk_list)
   `);
 
   for (const u of users) {
@@ -112,5 +126,7 @@ module.exports = {
   findByPhone,
   listOthers,
   listAllForMenu,
+  tzintukExtensionFor,
+  setTzintukList,
   seedUsersFromEnv,
 };

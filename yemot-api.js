@@ -125,4 +125,26 @@ async function runTzintuk(listId) {
   return data;
 }
 
-module.exports = { downloadRecording, sendTextReply, uploadJson, downloadJson, runTzintuk };
+/**
+ * יוצר שלוחת tzintuk חדשה בנתיב נתון, על ידי כתיבת קובץ ext.ini שמגדיר אותה - בלי צורך
+ * בהגדרה ידנית בפאנל ימות בכלל. ראו yemot-ivr.js - route '/tzintuk' קורא לזה כשמישהו
+ * מתקשר ועוד אין לו שלוחת tzintuk אישית, ואז מעביר אותו אליה (call.go_to_folder) כדי
+ * שיירשם בעצמו. תוכן ה-ext.ini אומת ע"י המשתמש כתקין (type=tzintuk + list_tzintuk בלבד -
+ * לא צריך tzintuk_admin/run_tzintuk_automat, כי אנחנו מפעילים את הצינתוק ב-API מפורש
+ * (runTzintuk למעלה) ולא מסתמכים על ה"אוטומט" שסורק לבד).
+ */
+async function provisionTzintukExtension(extensionPath, listId) {
+  const token = await login();
+  const iniContent = ['type=tzintuk', `list_tzintuk=${listId}`].join('\n');
+  const path = `ivr2:${extensionPath}/ext.ini`;
+  return uploadFile(token, path, Buffer.from(iniContent, 'utf-8'), 'ext.ini');
+}
+
+module.exports = {
+  downloadRecording,
+  sendTextReply,
+  uploadJson,
+  downloadJson,
+  runTzintuk,
+  provisionTzintukExtension,
+};

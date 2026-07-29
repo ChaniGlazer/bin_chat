@@ -2,10 +2,18 @@
 // אחת בפאנל ימות - אין צורך בשלוחה נפרדת לכל משתמש). מזהה את השולח אוטומטית לפי מספר
 // המתקשר (ApiPhone), ושואלת רק "למי לשלוח" בתפריט טונים דינמי לפי USERS_JSON - מקליטה
 // הודעה קולית, מתמללת אותה ושולחת אותה לנמען שנבחר (ראו chat.js).
+// route `/yemot/tzintuk` (שלוחת API נפרדת, מוגדרת פעם אחת בפאנל) - יוצרת אוטומטית שלוחת
+// tzintuk אישית למי שמתקשר (אם עוד אין לו), ומעבירה אותו אליה (go_to_folder) כדי שיירשם.
 const { YemotRouter } = require('yemot-router2');
-const { downloadRecording } = require('./yemot-api');
+const { downloadRecording, provisionTzintukExtension } = require('./yemot-api');
 const { transcribeAudio } = require('./openai-transcribe');
-const { findByYemotExtension, findByPhone, listAllForMenu } = require('./users');
+const {
+  findByYemotExtension,
+  findByPhone,
+  listAllForMenu,
+  tzintukExtensionFor,
+  setTzintukList,
+} = require('./users');
 const { deliverMessage } = require('./chat');
 
 const yemotRouter = YemotRouter({
@@ -87,6 +95,30 @@ yemotRouter.get('/', async (call) => {
   }
 
   return call.id_list_message([{ type: 'text', data: 'ההודעה נשמרה בהצלחה, תודה' }]);
+});
+
+// שלוחת רישום לצינתוקים - יוצרת אוטומטית שלוחת tzintuk אישית למי שמתקשר (בפעם הראשונה
+// בלבד - בפעמים הבאות פשוט מעבירה אליה, שם ימות עצמה מציעה תפריט "הוספה/הסרה מהרשימה").
+yemotRouter.get('/tzintuk', async (call) => {
+  const callerPhone = call.ApiPhone || call.values?.ApiPhone || null;
+  const user = callerPhone ? findByPhone(callerPhone) : null;
+  if (!user) {
+    console.error(`שיחה לרישום צינתוק ממספר לא מזוהה כמשתמש: ${callerPhone}`);
+    return call.id_list_message([{ type: 'text', data: 'המספר שלך לא מזוהה במערכת, נסה שוב מאוחר יותר' }]);
+  }
+
+  const extensionPath = tzintukExtensionFor(user);
+  if (!user.tzintuk_list) {
+    try {
+      await provisionTzintukExtension(extensionPath, extensionPath);
+      setTzintukList(user.id, extensionPath);
+    } catch (err) {
+      console.error(`יצירת שלוחת צינתוק ל-${user.username} נכשלה:`, err.message);
+      return call.id_list_message([{ type: 'text', data: 'אירעה שגיאה ביצירת הרישום, נסה שוב מאוחר יותר' }]);
+    }
+  }
+
+  return call.go_to_folder(`/${extensionPath}`);
 });
 
 module.exports = yemotRouter;
