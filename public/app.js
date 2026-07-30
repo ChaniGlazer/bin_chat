@@ -14,7 +14,7 @@ const replyInput = document.getElementById('reply-input');
 const contactsEl = document.getElementById('contacts');
 const chatTitleEl = document.getElementById('chat-title');
 
-let currentContact = null;
+let currentConversation = null; // { type: 'user', id: username } | { type: 'group', id: groupId }
 
 // לא ניתן להסתמך על פרומפט ה-Basic Auth המובנה של הדפדפן - הוא לא עובד באמינות
 // ב-PWA מותקן במסך הבית ב-iOS. במקום זה שומרים כאן את הפרטים אחרי טופס התחברות
@@ -115,35 +115,44 @@ async function enablePush() {
 }
 
 async function loadContacts() {
-  const res = await apiFetch('/contacts');
-  if (!res.ok) return;
-  const contacts = await res.json();
+  const [contactsRes, groupsRes] = await Promise.all([apiFetch('/contacts'), apiFetch('/groups')]);
+  const contacts = contactsRes.ok ? await contactsRes.json() : [];
+  const groups = groupsRes.ok ? await groupsRes.json() : [];
 
-  contactsEl.innerHTML = contacts
-    .map((c) => `<button class="contact" data-username="${escapeHtml(c.username)}">${escapeHtml(c.label || c.username)}</button>`)
+  const groupButtons = groups
+    .map((g) => `<button class="contact" data-type="group" data-id="${g.id}">👥 ${escapeHtml(g.name)}</button>`)
     .join('');
+  const contactButtons = contacts
+    .map((c) => `<button class="contact" data-type="user" data-id="${escapeHtml(c.username)}">${escapeHtml(c.label || c.username)}</button>`)
+    .join('');
+  contactsEl.innerHTML = groupButtons + contactButtons;
 
   contactsEl.querySelectorAll('.contact').forEach((btn) => {
-    btn.addEventListener('click', () => selectContact(btn.dataset.username));
+    btn.addEventListener('click', () => selectConversation(btn.dataset.type, btn.dataset.id, btn.textContent));
   });
 
-  if (!currentContact && contacts.length) {
-    selectContact(contacts[0].username);
+  if (!currentConversation) {
+    if (groups.length) selectConversation('group', groups[0].id, `👥 ${groups[0].name}`);
+    else if (contacts.length) selectConversation('user', contacts[0].username, contacts[0].label || contacts[0].username);
   }
 }
 
-function selectContact(username) {
-  currentContact = username;
-  chatTitleEl.textContent = username;
+function selectConversation(type, id, label) {
+  currentConversation = { type, id };
+  chatTitleEl.textContent = label;
   contactsEl.querySelectorAll('.contact').forEach((btn) => {
-    btn.classList.toggle('active', btn.dataset.username === username);
+    btn.classList.toggle('active', btn.dataset.type === type && btn.dataset.id === String(id));
   });
   loadMessages();
 }
 
 async function loadMessages() {
-  if (!currentContact) return;
-  const res = await apiFetch(`/messages?with=${encodeURIComponent(currentContact)}`);
+  if (!currentConversation) return;
+  const query =
+    currentConversation.type === 'group'
+      ? `group=${encodeURIComponent(currentConversation.id)}`
+      : `with=${encodeURIComponent(currentConversation.id)}`;
+  const res = await apiFetch(`/messages?${query}`);
   if (!res.ok) {
     chatEl.innerHTML = '<div class="empty">שגיאה בטעינת הודעות</div>';
     return;
@@ -159,7 +168,8 @@ async function loadMessages() {
 
 function renderMessage(m) {
   const side = m.direction === 'out' ? 'out' : 'in';
-  return `<div class="bubble ${side}"><div class="text">${escapeHtml(m.text)}</div><div class="time">${m.created_at}</div></div>`;
+  const senderLine = m.sender && side === 'in' ? `<div class="sender">${escapeHtml(m.sender)}</div>` : '';
+  return `<div class="bubble ${side}">${senderLine}<div class="text">${escapeHtml(m.text)}</div><div class="time">${m.created_at}</div></div>`;
 }
 
 function escapeHtml(str) {
@@ -171,14 +181,17 @@ function escapeHtml(str) {
 async function sendReply(event) {
   event.preventDefault();
   const text = replyInput.value.trim();
-  if (!text || !currentContact) return;
+  if (!text || !currentConversation) return;
+
+  const payload =
+    currentConversation.type === 'group' ? { toGroup: currentConversation.id, text } : { to: currentConversation.id, text };
 
   replyInput.disabled = true;
   try {
     const res = await apiFetch('/send', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ to: currentContact, text }),
+      body: JSON.stringify(payload),
     });
     if (!res.ok) throw new Error('send failed');
     replyInput.value = '';

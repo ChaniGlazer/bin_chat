@@ -4,10 +4,12 @@ const express = require('express');
 const db = require('./db');
 const { backupToYemot, restoreAllFromYemot } = require('./backup');
 const { verifyPassword, findByUsername, listOthers, seedUsersFromEnv } = require('./users');
-const { deliverMessage } = require('./chat');
+const { deliverMessage, deliverGroupMessage } = require('./chat');
+const { ensureDefaultGroup, findGroupById, listGroupsForUser, listGroupMembersExcept, isMember } = require('./groups');
 const yemotRouter = require('./yemot-ivr');
 
 seedUsersFromEnv();
+ensureDefaultGroup();
 
 const app = express();
 app.use(express.json());
@@ -70,6 +72,11 @@ app.get('/contacts', (req, res) => {
   res.json(listOthers(req.user.id));
 });
 
+// קבוצות שהמשתמש חבר בהן (ראו groups.js - כרגע תמיד קבוצה אחת קבועה, "כולם")
+app.get('/groups', (req, res) => {
+  res.json(listGroupsForUser(req.user.id));
+});
+
 // הדפדפן שולח לכאן את אובייקט ה-PushSubscription אחרי הרשמה
 app.post('/register-device', (req, res) => {
   const subscription = req.body;
@@ -83,11 +90,20 @@ app.post('/register-device', (req, res) => {
   res.json({ ok: true });
 });
 
-// שולח הודעה למשתמש אחר - נשמרת ב-DB, נדחפת ב-Push אם יש לו מכשיר רשום, ומועלית כ-TTS
-// לתיבת ימות שלו (ראו chat.js). `to` הוא ה-username של הנמען.
+// שולח הודעה למשתמש אחר או לקבוצה - נשמרת ב-DB, נדחפת ב-Push. הודעה אישית גם מועלית
+// כ-TTS ומפעילה צינתוק (ראו chat.js). `to` = username לנמען יחיד, `toGroup` = מזהה קבוצה.
 app.post('/send', async (req, res) => {
-  const { to, text } = req.body;
-  if (!to || !text) return res.status(400).json({ error: 'to and text required' });
+  const { to, toGroup, text } = req.body;
+  if ((!to && !toGroup) || !text) return res.status(400).json({ error: 'to/toGroup and text required' });
+
+  if (toGroup) {
+    const group = findGroupById(toGroup);
+    if (!group || !isMember(group.id, req.user.id)) return res.status(404).json({ error: 'unknown group' });
+
+    const members = listGroupMembersExcept(group.id, req.user.id);
+    await deliverGroupMessage(req.user, group, text, members);
+    return res.json({ ok: true });
+  }
 
   const recipient = findByUsername(to);
   if (!recipient) return res.status(404).json({ error: 'unknown recipient' });
@@ -96,10 +112,32 @@ app.post('/send', async (req, res) => {
   res.json({ ok: true });
 });
 
-// שיחה מול משתמש ספציפי (?with=username) - שתי הכיוונים, לא רק מה שקיבלתי
+// שיחה מול משתמש ספציפי (?with=username) או קבוצה (?group=id) - לא רק מה שקיבלתי
 app.get('/messages', (req, res) => {
+  if (req.query.group) {
+    const group = findGroupById(req.query.group);
+    if (!group || !isMember(group.id, req.user.id)) return res.status(404).json({ error: 'unknown group' });
+
+    const rows = db
+      .prepare(
+        `SELECT gm.id, gm.text, gm.created_at, gm.sender_id, u.label, u.username FROM group_messages gm
+         JOIN users u ON u.id = gm.sender_id
+         WHERE gm.group_id = ? ORDER BY gm.id DESC LIMIT 100`
+      )
+      .all(group.id);
+
+    const messages = rows.reverse().map((m) => ({
+      id: m.id,
+      text: m.text,
+      created_at: m.created_at,
+      direction: m.sender_id === req.user.id ? 'out' : 'in',
+      sender: m.label || m.username,
+    }));
+    return res.json(messages);
+  }
+
   const partner = req.query.with ? findByUsername(req.query.with) : null;
-  if (!partner) return res.status(400).json({ error: 'with (username) required' });
+  if (!partner) return res.status(400).json({ error: 'with (username) or group (id) required' });
 
   const rows = db
     .prepare(

@@ -37,6 +37,23 @@ function getDb() {
         subscription_json TEXT NOT NULL,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP
       );
+      CREATE TABLE IF NOT EXISTS groups (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL UNIQUE,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+      );
+      CREATE TABLE IF NOT EXISTS group_members (
+        group_id INTEGER NOT NULL REFERENCES groups(id),
+        user_id INTEGER NOT NULL REFERENCES users(id),
+        PRIMARY KEY (group_id, user_id)
+      );
+      CREATE TABLE IF NOT EXISTS group_messages (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        group_id INTEGER NOT NULL REFERENCES groups(id),
+        sender_id INTEGER NOT NULL REFERENCES users(id),
+        text TEXT NOT NULL,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP
+      );
     `);
 
     // מיגרציה: תומך ב-DB ישן שנוצר לפני התמיכה בצ'אט בין-משתמשים (sender_id/recipient_id)
