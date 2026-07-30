@@ -27,7 +27,9 @@ async function deliverMessage(sender, recipient, text) {
   }
 
   try {
-    await sendTextReply(text, recipient.yemot_reply_extension, recipient.phone);
+    // מוסיפים את שם השולח לפני הטקסט (רק בהקראה בטלפון - ב-DB/Push נשמר הטקסט הנקי)
+    // כדי שהשומע ידע ממי ההודעה, בלי לחייב אותו לזהות לפי קול/הקשר.
+    await sendTextReply(`הודעה מ${sender.label || sender.username}. ${text}`, recipient.yemot_reply_extension, recipient.phone);
   } catch (err) {
     console.error(`שליחת TTS לתיבת ימות של ${recipient.username} נכשלה:`, err.message);
   }
