@@ -26,9 +26,14 @@ app.use('/yemot', (req, res, next) => {
 // לפני requireAuth, זו קריאה חיצונית משרת ימות, לא מהדפדפן
 app.use('/yemot', yemotRouter.asExpressRouter);
 
-// כל מה שמתחת לכאן (הדף, הקבצים הסטטיים וה-API) דורש שם משתמש+סיסמה - כל משתמש עם
-// login נפרד משלו (מוגדרים ב-USERS_JSON, ראו users.js). שום סוד לא נשלח לדפדפן,
-// הדפדפן שולח Basic Auth רק אחרי שהמשתמש הקליד את הסיסמה בפרומפט המובנה.
+// הקבצים הסטטיים (index.html, app.js וכו') פתוחים לכולם בלי אימות - כדי שהעמוד יעלה
+// ויוכל להציג טופס התחברות משלו. זה נחוץ כי הפרומפט המובנה של הדפדפן ל-Basic Auth
+// לא עובד באמינות ב-PWA מותקן ב-iOS (מסך הבית) - אז לא אפשר להסתמך עליו, וכל האימות
+// עובר דרך /login + Authorization header שה-JS מצרף בעצמו לכל בקשת API (ראו public/app.js).
+app.use(express.static(path.join(__dirname, 'public')));
+
+// כל ה-API שמתחת לכאן דורש שם משתמש+סיסמה - כל משתמש עם login נפרד משלו (מוגדרים
+// ב-USERS_JSON, ראו users.js). שום סוד לא מוטבע בקוד - ה-JS שולח את מה שהוקלד בטופס.
 function requireAuth(req, res, next) {
   const header = req.header('authorization') || '';
   const [scheme, encoded] = header.split(' ');
@@ -40,12 +45,21 @@ function requireAuth(req, res, next) {
       return next();
     }
   }
-  res.set('WWW-Authenticate', 'Basic realm="messages-app", charset="UTF-8"');
-  res.status(401).send('נדרשת התחברות');
+  res.status(401).json({ error: 'unauthorized' });
 }
 
+// בודק אם username/password תקינים - נקרא מטופס ההתחברות של ה-JS (לא Basic Auth
+// מהדפדפן) כדי לדעת אם לשמור אותם ב-localStorage ולהמשיך.
+app.post('/login', (req, res) => {
+  const { username, password } = req.body || {};
+  const user = username ? findByUsername(username) : null;
+  if (!user || !verifyPassword(password || '', user.password_hash)) {
+    return res.status(401).json({ error: 'שם משתמש או סיסמה שגויים' });
+  }
+  res.json({ ok: true });
+});
+
 app.use(requireAuth);
-app.use(express.static(path.join(__dirname, 'public')));
 
 app.get('/vapid-public-key', (req, res) => {
   res.json({ publicKey: process.env.VAPID_PUBLIC_KEY });

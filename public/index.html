@@ -118,23 +118,63 @@
     }
     .contact.active { background: #3b82f6; }
     #chat-title { font-size: 0.9rem; color: #94a3b8; padding: 0 16px 4px; }
+
+    #login-screen {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding: 24px;
+      gap: 12px;
+    }
+    #login-screen h1 { text-align: center; margin-bottom: 8px; }
+    #login-screen input {
+      background: #1e293b;
+      border: none;
+      border-radius: 10px;
+      padding: 12px 14px;
+      color: #f1f5f9;
+      font-size: 1rem;
+    }
+    #login-screen button {
+      background: #3b82f6;
+      color: white;
+      border: none;
+      border-radius: 10px;
+      padding: 12px;
+      font-size: 1rem;
+      cursor: pointer;
+    }
+    #login-screen button:disabled { background: #334155; }
+    #login-error { color: #f87171; font-size: 0.85rem; min-height: 1.2em; text-align: center; }
+    #app-screen { display: none; flex: 1; flex-direction: column; min-height: 0; }
   </style>
 </head>
 <body>
-  <header>
-    <h1>הודעות</h1>
-    <div id="status"></div>
-    <button id="enable-btn">אפשר התראות</button>
-  </header>
+  <div id="login-screen">
+    <h1>התחברות</h1>
+    <input id="login-username" type="text" placeholder="שם משתמש" autocomplete="username" />
+    <input id="login-password" type="password" placeholder="סיסמה" autocomplete="current-password" />
+    <div id="login-error"></div>
+    <button id="login-btn">התחבר</button>
+  </div>
 
-  <div id="contacts"></div>
-  <div id="chat-title"></div>
-  <div id="chat"></div>
+  <div id="app-screen">
+    <header>
+      <h1>הודעות</h1>
+      <div id="status"></div>
+      <button id="enable-btn">אפשר התראות</button>
+    </header>
 
-  <form id="reply-form">
-    <input id="reply-input" type="text" placeholder="הקלד תשובה..." autocomplete="off" />
-    <button type="submit">שלח</button>
-  </form>
+    <div id="contacts"></div>
+    <div id="chat-title"></div>
+    <div id="chat"></div>
+
+    <form id="reply-form">
+      <input id="reply-input" type="text" placeholder="הקלד תשובה..." autocomplete="off" />
+      <button type="submit">שלח</button>
+    </form>
+  </div>
 
   <script src="/app.js"></script>
 </body>
