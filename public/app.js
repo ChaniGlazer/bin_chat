@@ -7,6 +7,7 @@ const loginError = document.getElementById('login-error');
 const loginBtn = document.getElementById('login-btn');
 
 const enableBtn = document.getElementById('enable-btn');
+const logoutBtn = document.getElementById('logout-btn');
 const statusEl = document.getElementById('status');
 const chatEl = document.getElementById('chat');
 const replyForm = document.getElementById('reply-form');
@@ -208,7 +209,16 @@ if ('serviceWorker' in navigator) {
   navigator.serviceWorker.register('/sw.js');
 }
 
+function logout() {
+  clearAuth();
+  currentConversation = null;
+  loginUsername.value = '';
+  loginPassword.value = '';
+  showLogin();
+}
+
 enableBtn.addEventListener('click', enablePush);
+logoutBtn.addEventListener('click', logout);
 replyForm.addEventListener('submit', sendReply);
 loginBtn.addEventListener('click', () => tryLogin(loginUsername.value.trim(), loginPassword.value));
 loginPassword.addEventListener('keydown', (e) => {

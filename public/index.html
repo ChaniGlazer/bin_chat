@@ -27,7 +27,16 @@
       padding: 16px 16px 8px;
       flex-shrink: 0;
     }
+    .header-row { display: flex; justify-content: space-between; align-items: center; }
     h1 { font-size: 1.2rem; margin: 0 0 4px; }
+    #logout-btn {
+      background: none;
+      border: none;
+      color: #94a3b8;
+      font-size: 0.8rem;
+      cursor: pointer;
+      padding: 4px 8px;
+    }
     #status { color: #94a3b8; font-size: 0.85rem; min-height: 1.2em; }
     #enable-btn {
       background: #3b82f6;
@@ -162,7 +171,10 @@
 
   <div id="app-screen">
     <header>
-      <h1>הודעות</h1>
+      <div class="header-row">
+        <h1>הודעות</h1>
+        <button id="logout-btn">התנתק</button>
+      </div>
       <div id="status"></div>
       <button id="enable-btn">אפשר התראות</button>
     </header>
