@@ -1,9 +1,9 @@
 // chat.js - שולח הודעה בין שני משתמשים רשומים, או לקבוצה (ראו groups.js), בלי קשר לערוץ
-// שבו הגיעה ההודעה: שומר ב-DB, דוחף Push למי שיש לו מכשיר רשום. הודעות אישיות (1:1) גם
-// מעלות TTS לתיבת ימות של הנמען (בתיקיית phone/<הטלפון של הנמען עצמו> תחת שלוחת ה-TTS
-// שלו - כך שכשהוא מתקשר לשלוחה המשותפת מהטלפון שלו, ימות מזהה אותו לפי Caller ID ומנחית
-// אותו בדיוק על התיקייה שלו) ומפעילות צינתוק אם יש tzintuk_list רשום (ראו yemot-api.js -
-// runTzintuk). הודעות קבוצה נשלחות רק ב-Push, לא בטלפון.
+// שבו הגיעה ההודעה: שומר ב-DB, דוחף Push למי שיש לו מכשיר רשום, ומעלה TTS לתיבת ימות של
+// כל נמען (בתיקיית phone/<הטלפון של הנמען עצמו> - להודעה אישית תחת שלוחת ה-TTS האישית
+// שלו, ולהודעת קבוצה תחת שלוחת ה-TTS של הקבוצה - כך שכשהוא מתקשר מהטלפון שלו, ימות
+// מזהה אותו לפי Caller ID ומנחית אותו בדיוק על התיקייה שלו). צינתוק (runTzintuk,
+// yemot-api.js) פועל רק בהודעות אישיות, לא בקבוצה.
 const db = require('./db');
 const { sendPushToAll } = require('./webpush');
 const { sendTextReply, runTzintuk } = require('./yemot-api');
@@ -57,7 +57,7 @@ async function deliverMessage(sender, recipient, text) {
   backupToYemot(recipient);
 }
 
-/** הודעה לקבוצה - Push בלבד לכל החברים חוץ מהשולח, בלי TTS/צינתוק (ראו groups.js). */
+/** הודעה לקבוצה - Push + TTS לכל החברים חוץ מהשולח, בלי צינתוק (ראו groups.js). */
 async function deliverGroupMessage(sender, group, text, members) {
   db.prepare('INSERT INTO group_messages (group_id, sender_id, text) VALUES (?, ?, ?)').run(
     group.id,
@@ -66,6 +66,17 @@ async function deliverGroupMessage(sender, group, text, members) {
   );
 
   await pushToUsers(members, `${sender.label || sender.username} (${group.name})`, text);
+
+  if (group.yemot_extension) {
+    const ttsText = `הודעה קבוצתית מ${sender.label || sender.username}, בקבוצת ${group.name}. ${text}`;
+    for (const member of members) {
+      try {
+        await sendTextReply(ttsText, group.yemot_extension, member.phone);
+      } catch (err) {
+        console.error(`שליחת TTS קבוצתי לתיבת ימות של ${member.username} נכשלה:`, err.message);
+      }
+    }
+  }
 }
 
 module.exports = { deliverMessage, deliverGroupMessage };

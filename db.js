@@ -40,6 +40,7 @@ function getDb() {
       CREATE TABLE IF NOT EXISTS groups (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
         name TEXT NOT NULL UNIQUE,
+        yemot_extension TEXT,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP
       );
       CREATE TABLE IF NOT EXISTS group_members (
@@ -77,6 +78,10 @@ function getDb() {
     }
     if (!userColumns.some((c) => c.name === 'tzintuk_list')) {
       _db.exec('ALTER TABLE users ADD COLUMN tzintuk_list TEXT');
+    }
+    const groupColumns = _db.prepare('PRAGMA table_info(groups)').all();
+    if (!groupColumns.some((c) => c.name === 'yemot_extension')) {
+      _db.exec('ALTER TABLE groups ADD COLUMN yemot_extension TEXT');
     }
   }
   return _db;
