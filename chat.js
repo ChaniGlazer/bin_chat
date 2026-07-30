@@ -37,9 +37,12 @@ async function deliverMessage(sender, recipient, text) {
   if (recipient.tzintuk_list) {
     try {
       await runTzintuk(recipient.tzintuk_list);
+      console.log(`צינתוק הופעל בהצלחה ל-${recipient.username} (tzintuk_list=${recipient.tzintuk_list})`);
     } catch (err) {
       console.error(`הפעלת צינתוק ל-${recipient.username} נכשלה:`, err.message);
     }
+  } else {
+    console.log(`לא הופעל צינתוק ל-${recipient.username} - אין לו tzintuk_list רשום`);
   }
 
   backupToYemot(sender);
