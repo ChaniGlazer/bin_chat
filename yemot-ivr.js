@@ -1,7 +1,8 @@
 // yemot-ivr.js - שלוחה אחת משותפת לכל המשתמשים בימות המשיח (route `/yemot`, מוגדרת פעם
 // אחת בפאנל ימות - אין צורך בשלוחה נפרדת לכל משתמש). מזהה את השולח אוטומטית לפי מספר
-// המתקשר (ApiPhone), ושואלת רק "למי לשלוח" בתפריט טונים דינמי לפי USERS_JSON - מקליטה
-// הודעה קולית, מתמללת אותה ושולחת אותה לנמען שנבחר (ראו chat.js).
+// המתקשר (ApiPhone), ושואלת רק "למי לשלוח" בתפריט טונים דינמי לפי USERS_JSON + קבוצות
+// (ראו groups.js) - מקליטה הודעה קולית, מתמללת אותה ושולחת אותה לנמען/לקבוצה שנבחרו
+// (ראו chat.js).
 // route `/yemot/tzintuk` (שלוחת API נפרדת, מוגדרת פעם אחת בפאנל) - יוצרת אוטומטית שלוחת
 // tzintuk אישית למי שמתקשר (אם עוד אין לו), ומעבירה אותו אליה (go_to_folder) כדי שיירשם.
 const { YemotRouter } = require('yemot-router2');
@@ -14,7 +15,8 @@ const {
   tzintukExtensionFor,
   setTzintukList,
 } = require('./users');
-const { deliverMessage } = require('./chat');
+const { findGroupByYemotExtension, listGroupsForMenu, listGroupMembersExcept } = require('./groups');
+const { deliverMessage, deliverGroupMessage } = require('./chat');
 
 const yemotRouter = YemotRouter({
   printLog: true,
@@ -28,20 +30,32 @@ const yemotRouter = YemotRouter({
   },
 });
 
-/** בונה הודעת תפריט "לבנימין הקש 1, לשמואל הקש 2..." מתוך כל המשתמשים הרשומים. */
+/** בונה הודעת תפריט "לבנימין הקש 1, לשמואל הקש 2..., לכולם הקש 9" ממשתמשים+קבוצות. */
 function buildMenuPrompt() {
   const users = listAllForMenu();
-  const parts = users.map((u) => `ל${u.label} הקש ${u.yemot_extension}`);
+  const groups = listGroupsForMenu();
+  const parts = [
+    ...users.map((u) => `ל${u.label} הקש ${u.yemot_extension}`),
+    ...groups.map((g) => `ל${g.name} הקש ${g.yemot_extension}`),
+  ];
   return parts.join(', ');
 }
 
+/** מחזיר { type: 'user', record } או { type: 'group', record } לפי מה שהוקש, או null אם לא נמצא. */
 async function askForRecipient(call) {
   const code = await call.read(
     [{ type: 'text', data: `למי ברצונך לשלוח הודעה? ${buildMenuPrompt()}, ולאחר מכן סולמית` }],
     'tap',
     { max_digits: 10, min_digits: 1, digits_allowed: [], typing_playback_mode: 'Digits' }
   );
-  return findByYemotExtension(String(code));
+
+  const user = findByYemotExtension(String(code));
+  if (user) return { type: 'user', record: user };
+
+  const group = findGroupByYemotExtension(String(code));
+  if (group) return { type: 'group', record: group };
+
+  return null;
 }
 
 async function transcribeRecording(filePath) {
@@ -86,7 +100,13 @@ yemotRouter.get('/', async (call) => {
     // מתמללים ומשליכים את בייטי האודיו - לא שומרים הקלטה, רק טקסט
     const transcript = await transcribeRecording(filePath);
     const text = transcript || `התקבלה הודעה קולית מ-${sender.phone}, אך התמלול נכשל`;
-    await deliverMessage(sender, recipient, text);
+
+    if (recipient.type === 'group') {
+      const members = listGroupMembersExcept(recipient.record.id, sender.id);
+      await deliverGroupMessage(sender, recipient.record, text, members);
+    } else {
+      await deliverMessage(sender, recipient.record, text);
+    }
   } catch (err) {
     console.error('שגיאה בטיפול בהקלטה מימות המשיח:', err);
     return call.id_list_message([

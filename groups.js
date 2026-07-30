@@ -32,6 +32,16 @@ function findGroupById(id) {
   return db.prepare('SELECT * FROM groups WHERE id = ?').get(id);
 }
 
+/** מוצא קבוצה לפי הקוד שהוקש בתפריט הטונים המשותף בימות (ראו yemot-ivr.js). */
+function findGroupByYemotExtension(extension) {
+  return db.prepare('SELECT * FROM groups WHERE yemot_extension = ?').get(extension);
+}
+
+/** כל הקבוצות עם שלוחת ימות מוגדרת - לבניית תפריט הטונים (ראו yemot-ivr.js). */
+function listGroupsForMenu() {
+  return db.prepare('SELECT id, name, yemot_extension FROM groups WHERE yemot_extension IS NOT NULL ORDER BY name').all();
+}
+
 /** הקבוצות שהמשתמש חבר בהן - כרגע תמיד רק "כולם", אבל כתוב כללי לקראת קבוצות נוספות בעתיד. */
 function listGroupsForUser(userId) {
   return db
@@ -62,7 +72,9 @@ function isMember(groupId, userId) {
 module.exports = {
   ensureDefaultGroup,
   findGroupById,
+  findGroupByYemotExtension,
   listGroupsForUser,
+  listGroupsForMenu,
   listGroupMembersExcept,
   isMember,
 };
