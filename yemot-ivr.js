@@ -7,6 +7,7 @@
 // tzintuk אישית למי שמתקשר (אם עוד אין לו), ומעבירה אותו אליה (go_to_folder) כדי שיירשם.
 const { YemotRouter } = require('yemot-router2');
 const { downloadRecording, provisionTzintukExtension } = require('./yemot-api');
+const { backupToYemot } = require('./backup');
 const { transcribeAudio } = require('./openai-transcribe');
 const {
   findByYemotExtension,
@@ -132,6 +133,8 @@ yemotRouter.get('/tzintuk', async (call) => {
     try {
       await provisionTzintukExtension(extensionPath, extensionPath);
       setTzintukList(user.id, extensionPath);
+      user.tzintuk_list = extensionPath;
+      await backupToYemot(user); // שומר את הרישום מיד לגיבוי בימות, כדי שלא יאבד ב-redeploy הבא
       console.log(`נוצרה שלוחת צינתוק חדשה עבור ${user.username} (${user.phone}): tzintukList=${extensionPath}`);
     } catch (err) {
       console.error(`יצירת שלוחת צינתוק ל-${user.username} נכשלה:`, err.message);

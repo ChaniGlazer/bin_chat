@@ -167,10 +167,17 @@ async function loadMessages() {
   chatEl.scrollTop = chatEl.scrollHeight;
 }
 
+// ה-DB שומר את created_at ב-UTC (CURRENT_TIMESTAMP של SQLite) בפורמט "YYYY-MM-DD HH:MM:SS"
+// בלי ציון אזור זמן - צריך להוסיף אותו במפורש כדי שהדפדפן לא יפרש את זה כזמן מקומי בטעות.
+function formatTime(sqliteTimestamp) {
+  const date = new Date(sqliteTimestamp.replace(' ', 'T') + 'Z');
+  return date.toLocaleString('he-IL', { timeZone: 'Asia/Jerusalem', dateStyle: 'short', timeStyle: 'short' });
+}
+
 function renderMessage(m) {
   const side = m.direction === 'out' ? 'out' : 'in';
   const senderLine = m.sender && side === 'in' ? `<div class="sender">${escapeHtml(m.sender)}</div>` : '';
-  return `<div class="bubble ${side}">${senderLine}<div class="text">${escapeHtml(m.text)}</div><div class="time">${m.created_at}</div></div>`;
+  return `<div class="bubble ${side}">${senderLine}<div class="text">${escapeHtml(m.text)}</div><div class="time">${formatTime(m.created_at)}</div></div>`;
 }
 
 function escapeHtml(str) {

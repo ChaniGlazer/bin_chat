@@ -7,13 +7,13 @@
 // מול Render) - אימות לפי username הוא היחיד שנשאר תקף בין המופעים.
 const db = require('./db');
 const { uploadJson, downloadJson } = require('./yemot-api');
-const { findByUsername } = require('./users');
+const { findByUsername, setTzintukList } = require('./users');
 
 function backupPath(user) {
   return `ivr2:${user.yemot_reply_extension}/Phone/${user.phone}/backup.json`;
 }
 
-/** שולף את הודעות+subscriptions של משתמש בודד (שנשלחו ע"י או אליו) ומעלה כקובץ JSON. לא קריטי - שגיאה כאן לא מפילה בקשה. */
+/** שולף את הודעות+subscriptions+רישום צינתוק של משתמש בודד ומעלה כקובץ JSON. לא קריטי - שגיאה כאן לא מפילה בקשה. */
 async function backupToYemot(user) {
   try {
     const messages = db
@@ -26,7 +26,7 @@ async function backupToYemot(user) {
       )
       .all(user.id, user.id);
     const subscriptions = db.prepare('SELECT subscription_json, created_at FROM subscriptions WHERE user_id = ?').all(user.id);
-    await uploadJson(backupPath(user), { messages, subscriptions });
+    await uploadJson(backupPath(user), { messages, subscriptions, tzintukList: user.tzintuk_list || null });
   } catch (err) {
     console.error(`גיבוי לימות המשיח נכשל (${user.username}):`, err.message);
   }
@@ -35,7 +35,9 @@ async function backupToYemot(user) {
 /**
  * ממזג הודעות (וב-restore הראשוני גם subscriptions) מהגיבוי של משתמש ל-DB המקומי.
  * בטוח להריץ שוב ושוב - זיהוי כפילויות לפי תוכן (שולח+נמען+טקסט+זמן), לא לפי id שלא
- * ניתן לשחזור בין מופעי DB שונים.
+ * ניתן לשחזור בין מופעי DB שונים. רישום הצינתוק (tzintukList) משוחזר תמיד כשאין ערך
+ * מקומי - זה קריטי לשחזר גם כשיש כבר הודעות מקומיות (למשל אחרי redeploy שמחק רק חלק
+ * מהנתונים), כי בלעדיו הודעות חדשות לא יפעילו צינתוק אף שהמשתמש כבר רשום בימות בפועל.
  */
 async function mergeFromYemot(user, { includeSubscriptions }) {
   const data = await downloadJson(backupPath(user));
@@ -68,21 +70,26 @@ async function mergeFromYemot(user, { includeSubscriptions }) {
     }
   }
 
+  if (data.tzintukList && !user.tzintuk_list) {
+    setTzintukList(user.id, data.tzintukList);
+    console.log(`שוחזר רישום צינתוק (tzintuk_list=${data.tzintukList}) עבור ${user.username} מהגיבוי בימות המשיח`);
+  }
+
   return added;
 }
 
 /**
- * משחזר את הנתונים של משתמש בודד מהגיבוי בימות - רק אם אין לו כבר הודעות מקומיות
- * (למשל אחרי deploy חדש ב-Render שמחק את הדיסק). לא דורס נתונים מקומיים קיימים.
+ * משחזר את הנתונים של משתמש בודד מהגיבוי בימות. רישום הצינתוק משוחזר תמיד (אם חסר
+ * מקומית); הודעות+subscriptions משוחזרים רק אם אין למשתמש כבר הודעות מקומיות (למשל
+ * אחרי deploy חדש ב-Render שמחק את הדיסק) - לא דורסים נתונים מקומיים קיימים.
  */
 async function restoreFromYemot(user) {
   const { c } = db
     .prepare('SELECT COUNT(*) AS c FROM messages WHERE sender_id = ? OR recipient_id = ?')
     .get(user.id, user.id);
-  if (c > 0) return;
 
-  const added = await mergeFromYemot(user, { includeSubscriptions: true });
-  if (added) {
+  const added = await mergeFromYemot(user, { includeSubscriptions: c === 0 });
+  if (c === 0 && added) {
     console.log(`שוחזרו ${added} הודעות מהגיבוי בימות המשיח עבור ${user.username}`);
   }
 }
