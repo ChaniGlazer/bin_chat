@@ -2,7 +2,7 @@ require('dotenv').config();
 const path = require('node:path');
 const express = require('express');
 const db = require('./db');
-const { backupToYemot, restoreAllFromYemot } = require('./backup');
+const { backupToYemot, restoreAllFromYemot, syncAllFromYemot } = require('./backup');
 const { verifyPassword, findByUsername, listOthers, seedUsersFromEnv } = require('./users');
 const { deliverMessage, deliverGroupMessage } = require('./chat');
 const { ensureDefaultGroup, findGroupById, listGroupsForUser, listGroupMembersExcept, isMember } = require('./groups');
@@ -161,4 +161,14 @@ restoreAllFromYemot()
   .catch((err) => console.error('שחזור גיבוי מימות המשיח נכשל:', err.message))
   .finally(() => {
     app.listen(PORT, () => console.log(`Server running on port ${PORT}`));
+
+    // מצב "מירור מקומי" - שרת שרץ במקביל לרנדר (למשל על המחשב שלך) רק כדי להציג את
+    // כל הצ'אטים, בלי לשמש בפועל לשליחה/קבלה. מושך מהגיבוי בימות כל דקה כדי לראות
+    // הודעות חדשות שנשלחו דרך המופע האמיתי (ראו LOCAL_MIRROR ב-README).
+    if (process.env.LOCAL_MIRROR === 'true') {
+      console.log('מצב מירור מקומי פעיל - מסנכרן הודעות מהגיבוי בימות המשיח כל דקה');
+      setInterval(() => {
+        syncAllFromYemot().catch((err) => console.error('סנכרון מירור מקומי נכשל:', err.message));
+      }, 60_000);
+    }
   });
