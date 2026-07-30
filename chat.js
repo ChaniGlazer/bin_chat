@@ -18,7 +18,7 @@ async function deliverMessage(sender, recipient, text) {
   const rows = db.prepare('SELECT subscription_json FROM subscriptions WHERE user_id = ?').all(recipient.id);
   const subscriptions = rows.map((r) => JSON.parse(r.subscription_json));
   if (subscriptions.length) {
-    const results = await sendPushToAll(subscriptions, `${sender.username}: ${text}`);
+    const results = await sendPushToAll(subscriptions, sender.label || sender.username, text);
     const expired = results.filter((r) => r.expired).map((r) => r.endpoint);
     if (expired.length) {
       const del = db.prepare('DELETE FROM subscriptions WHERE endpoint = ?');

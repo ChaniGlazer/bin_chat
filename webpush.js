@@ -12,8 +12,8 @@ webpush.setVapidDetails(
  * מחזיר מערך תוצאות עם endpoint + ok + statusCode, כדי שהקורא יוכל
  * למחוק subscriptions שפגו (404/410) מהדאטהבייס.
  */
-async function sendPushToAll(subscriptions, text) {
-  const payload = JSON.stringify({ title: 'הודעה חדשה', body: text });
+async function sendPushToAll(subscriptions, title, body) {
+  const payload = JSON.stringify({ title, body });
 
   const settled = await Promise.allSettled(
     subscriptions.map((sub) => webpush.sendNotification(sub, payload))
