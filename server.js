@@ -7,12 +7,15 @@ const { verifyPassword, findByUsername, listOthers, seedUsersFromEnv } = require
 const { deliverMessage, deliverGroupMessage } = require('./chat');
 const { ensureDefaultGroup, findGroupById, listGroupsForUser, listGroupMembersExcept, isMember } = require('./groups');
 const yemotRouter = require('./yemot-ivr');
+const whatsappRouter = require('./whatsapp-router');
 
 seedUsersFromEnv();
 ensureDefaultGroup();
 
 const app = express();
 app.use(express.json());
+// Twilio שולח את ה-webhook הנכנס (ראו whatsapp-router.js) כ-form-encoded, לא JSON
+app.use(express.urlencoded({ extended: false }));
 
 // לוג זמני לאבחון "אין מענה בשרת API" - yemot-router2 דורש 4 פרמטרים חובה
 // (ApiPhone/ApiDID/ApiExtension/ApiCallId) ועונה בשקט בלי שום לוג אם אחד מהם חסר,
@@ -27,6 +30,11 @@ app.use('/yemot', (req, res, next) => {
 // (ראו yemot-ivr.js - היא שואלת "מי אתה" ו"למי לשלוח" בתפריט טונים דינמי) - חייב להישאר
 // לפני requireAuth, זו קריאה חיצונית משרת ימות, לא מהדפדפן
 app.use('/yemot', yemotRouter.asExpressRouter);
+
+// webhook דו-כיווני מול Twilio WhatsApp API (ראו whatsapp-router.js) - חייב להישאר לפני
+// requireAuth, זו קריאה חיצונית מ-Twilio (POST הודעות נכנסות), לא מהדפדפן; האימות שלה
+// הוא חתימת webhook (X-Twilio-Signature), לא Basic Auth של האפליקציה
+app.use('/whatsapp', whatsappRouter);
 
 // הקבצים הסטטיים (index.html, app.js וכו') פתוחים לכולם בלי אימות - כדי שהעמוד יעלה
 // ויוכל להציג טופס התחברות משלו. זה נחוץ כי הפרומפט המובנה של הדפדפן ל-Basic Auth

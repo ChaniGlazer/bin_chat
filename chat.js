@@ -7,7 +7,26 @@
 const db = require('./db');
 const { sendPushToAll } = require('./webpush');
 const { sendTextReply, runTzintuk } = require('./yemot-api');
+const { sendWhatsAppText, sendWhatsAppTemplate } = require('./whatsapp-api');
 const { backupToYemot } = require('./backup');
+
+/**
+ * שולח הודעת WhatsApp חופשית (חינמית, בתוך חלון 24 שעות של שיחה פעילה) - אם היא נכשלת
+ * ספציפית כי החלון סגור (קוד שגיאה 63016/63024 של Twilio - "outside the allowed window")
+ * ומוגדר TWILIO_NOTIFY_CONTENT_SID, מנסים fallback ל-Content Template מאושר מראש (המקרה
+ * האופייני: התראת Yemot יזומה, בלי שהנמען כתב משהו ב-WhatsApp לאחרונה). כישלון בשני
+ * הניסיונות רק נרשם ללוג ע"י הקורא.
+ */
+async function sendWhatsAppNotification(text, recipient) {
+  try {
+    await sendWhatsAppText(text, recipient.phone);
+  } catch (err) {
+    const contentSid = process.env.TWILIO_NOTIFY_CONTENT_SID;
+    if (![63016, 63024].includes(err.code) || !contentSid) throw err;
+
+    await sendWhatsAppTemplate(contentSid, { 1: text }, recipient.phone);
+  }
+}
 
 /** דוחף Push לרשימת משתמשים (חוץ מהשולח כבר מסונן ע"י הקורא), ומנקה subscriptions שפגו. */
 async function pushToUsers(users, title, body) {
@@ -40,6 +59,12 @@ async function deliverMessage(sender, recipient, text) {
     await sendTextReply(`הודעה מ${sender.label || sender.username}. ${text}`, recipient.yemot_reply_extension, recipient.phone);
   } catch (err) {
     console.error(`שליחת TTS לתיבת ימות של ${recipient.username} נכשלה:`, err.message);
+  }
+
+  try {
+    await sendWhatsAppNotification(`הודעה מ${sender.label || sender.username}: ${text}`, recipient);
+  } catch (err) {
+    console.error(`שליחת WhatsApp ל-${recipient.username} נכשלה:`, err.message);
   }
 
   if (recipient.tzintuk_list) {
@@ -75,6 +100,15 @@ async function deliverGroupMessage(sender, group, text, members) {
       } catch (err) {
         console.error(`שליחת TTS קבוצתי לתיבת ימות של ${member.username} נכשלה:`, err.message);
       }
+    }
+  }
+
+  const whatsappText = `הודעה קבוצתית מ${sender.label || sender.username}, בקבוצת ${group.name}: ${text}`;
+  for (const member of members) {
+    try {
+      await sendWhatsAppNotification(whatsappText, member);
+    } catch (err) {
+      console.error(`שליחת WhatsApp קבוצתי ל-${member.username} נכשלה:`, err.message);
     }
   }
 }

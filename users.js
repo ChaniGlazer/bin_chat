@@ -36,6 +36,17 @@ function findByPhone(phone) {
 }
 
 /**
+ * מוצא משתמש לפי טלפון בכל פורמט (מקומי "0501111111" או בינלאומי "972501111111"/
+ * "+972501111111") ע"י השוואת 9 הספרות האחרונות בלבד - בשונה מ-findByPhone (התאמה
+ * מדויקת, מספיק ל-Yemot ש-ApiPhone שלו כבר בפורמט המקומי הזהה למה שנשמר). דרוש ל-WhatsApp
+ * (Meta Cloud API) ששולח את השדה `from` בפורמט בינלאומי (ראו whatsapp-router.js).
+ */
+function findByPhoneSuffix(phone) {
+  const digits = String(phone).replace(/\D/g, '').slice(-9);
+  return db.prepare("SELECT * FROM users WHERE substr(phone, -9) = ?").get(digits);
+}
+
+/**
  * שלוחה/רשימת tzintuk ייעודית שנוצרת אוטומטית לכל משתמש (ראו yemot-ivr.js route '/tzintuk'
  * ו-yemot-api.js provisionTzintukExtension) - אין צורך שהמספר יהיה קצר/יפה, הוא לא נשמע
  * ולא מוקש בשום מקום, רק צריך להיות ייחודי. "9" מונע התנגשות עם yemotExtension הקטנים (1,2,3...).
@@ -124,6 +135,7 @@ module.exports = {
   findByUsername,
   findByYemotExtension,
   findByPhone,
+  findByPhoneSuffix,
   listOthers,
   listAllForMenu,
   tzintukExtensionFor,

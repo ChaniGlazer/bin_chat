@@ -139,7 +139,8 @@ Push+TTS.
 ("התקבלה הודעה קולית מ-X, אך התמלול נכשל") - כך לפחות ידע הנמען שנשלחה אליו הודעה, גם אם
 לא הצלחתם לדעת מה נאמר בה.
 
-כדי לשנות מודל (למשל לדיוק גבוה יותר): `OPENAI_TRANSCRIBE_MODEL=gpt-4o-transcribe`.
+כדי לשנות מודל: `OPENAI_TRANSCRIBE_MODEL=gpt-4o-transcribe` (דיוק גבוה יותר) או
+`OPENAI_TRANSCRIBE_MODEL=whisper-1` (מודל Whisper המקורי).
 
 ### הגדרה בצד ימות המשיח (פאנל הניהול שלהם)
 פעם אחת בלבד, לכל האפליקציה (לא לכל משתמש):
@@ -216,6 +217,48 @@ https://www.call2all.co.il/ym/api/RunTzintuk?token=<מספר מערכת>:<סיס
 לא מצאתי תיעוד רשמי חד-משמעי (רק אשכולות פורום) - העלות המדויקת ופרטים קטנים (כמו הפורמט
 המדויק של `phones=tzl:`) לא מאומתים ב-100%. מומלץ לבדוק עם משתמש אחד בפועל לפני שסומכים על
 זה לכולם.
+
+## חיבור WhatsApp (Twilio)
+בנוסף ל-Push/TTS/צינתוק, אפשר לחבר ערוץ WhatsApp אמיתי - **דו-כיווני**: הודעה שנשלחת
+מהאפליקציה/מימות מגיעה גם כ-WhatsApp לנמען, וגם אפשר לשלוח הודעת WhatsApp חדשה (עם קידומת
+קוד הנמען) ולקבל אותה כהודעה רגילה במערכת - בלי להתקין את ה-PWA בכלל.
+
+נבחר **Twilio** (ולא Meta Cloud API ישיר) - הקמה פשוטה יותר דרך Twilio Console, בלי צורך
+ב-App Review/System User של Meta. **לא** נעשה שימוש בספריות בלתי-רשמיות
+(whatsapp-web.js/Baileys) - סיכון חסימת המספר וחוסר יציבות מול Render (בלי דיסק קבוע,
+ריצת דפדפן persistent לא אמינה ב-free tier).
+
+### מוסכמת השליחה מ-WhatsApp
+אין תפריט טונים כמו בשיחת ימות - במקום זה, כותבים בהודעת WhatsApp **קודם את הקוד של
+הנמען** (אותו `yemotExtension` שכבר מוגדר לו/לקבוצה ב-`USERS_JSON`/קבוצות), רווח, ואז
+הטקסט. לדוגמה: `1 שלום, מגיע ברבע לשבע`. קוד לא מזוהה (או הודעה בלי קוד) לא נשלחת בפועל -
+מתקבלת בחזרה הודעת הסבר עם רשימת הקודים העדכנית.
+
+### הגדרה חד-פעמית ב-Twilio Console
+1. פתח/י חשבון ב-[twilio.com](https://www.twilio.com), ומ-Console Dashboard תמצא/י את
+   `TWILIO_ACCOUNT_SID` ו-`TWILIO_AUTH_TOKEN`.
+2. **לפיתוח/בדיקות**: הפעל/י את [Twilio Sandbox for
+   WhatsApp](https://www.twilio.com/docs/whatsapp/sandbox) - תקבל/י מספר סנדבוקס וקוד
+   הצטרפות. **כל נמען** (כולל אתה) חייב לשלוח פעם אחת את קוד ההצטרפות למספר הסנדבוקס
+   מ-WhatsApp שלו לפני שהוא יכול לקבל הודעות - זו מגבלה של Twilio, לא של הקוד.
+   `TWILIO_WHATSAPP_FROM=whatsapp:+14155238886` (מספר הסנדבוקס הסטנדרטי).
+3. **לפרודקשן**: יש לרכוש/לחבר מספר טלפון ולהגיש אותו לאישור WhatsApp Business דרך
+   Twilio - תהליך נפרד, לא נדרש כדי להתחיל לבדוק.
+4. ב-Sandbox settings (או ב-WhatsApp Senders בפרודקשן), הגדר/י "WHEN A MESSAGE COMES IN":
+   `https://YOUR-APP.onrender.com/whatsapp`, method **POST**.
+5. מלא/י את משתני הסביבה (ראו `.env.example`): `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`,
+   `TWILIO_WHATSAPP_FROM`.
+
+### הודעה יזומה כשחלון 24 השעות סגור (Content Template)
+הודעה חינמית עובדת רק אם הנמען כתב לך משהו ב-24 השעות האחרונות. התראה **יזומה** - למשל
+הודעה שנשלחה דרך שיחת Yemot, בלי שהנמען פתח שיחת WhatsApp בעצמו - דורשת [Content
+Template](https://www.twilio.com/docs/content) מאושר מראש בקטגוריית **Utility**. צור/י
+template ב-Content Template Builder עם משתנה גוף אחד, למשל:
+```
+יש לך הודעה חדשה: {{1}}
+```
+אחרי האישור, קבעו `TWILIO_NOTIFY_CONTENT_SID=<ה-Content SID, מתחיל ב-HX>`. בלי זה, הודעה
+יזומה כזו רק תיכשל בלוג בשקט (Push/TTS/צינתוק ימשיכו לעבוד כרגיל - ראו `chat.js`).
 
 ## שמירת נתונים קבועה בשרת של ימות (לא רק בדיסק של Render)
 ה-DB המקומי (`messages.db`) יושב בדיסק הרגיל של Render, שנמחק בכל deploy מחדש (אלא אם קונים
